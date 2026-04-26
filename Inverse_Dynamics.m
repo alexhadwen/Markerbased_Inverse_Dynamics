@@ -9,7 +9,7 @@ thigh_mass = 0.1 * total_mass;
 pelvis_mass = 0.1420 * total_mass;
 
 %% Loading Static Data
-static_data = load('Static_0001.mat');
+static_data = load('Data/Static_0001.mat');
 
 labels = static_data.Alex_Static_0001.Trajectories.Labeled.Labels; % importing the labels into a list
 
@@ -288,7 +288,7 @@ lft_rel_mcf = lmcf_lcs_static^-1 * lfoot_lcs_static;
     pelvis_mass);
 
 %% Loading Walking Data
-walking_data = load('Walk_0001.mat');
+walking_data = load('Data/Walk_0001.mat');
 
 labels = walking_data.Alex_Walk_0001.Trajectories.Labeled.Labels;
 
@@ -322,20 +322,6 @@ for i = 1:length(labels)
     
     trajectory.(name) = filtered;
 end
-
-% %% Loading Walking Data
-% walking_data = load('Alex_Walk_0001.mat');
-% 
-% labels = walking_data.Alex_Walk_0001.Trajectories.Labeled.Labels;
-% 
-% timeseries_data = walking_data.Alex_Walk_0001.Trajectories.Labeled.Data;
-% 
-% trajectory = struct();
-% 
-% for i = 1:length(labels)
-%     name = labels{i};
-%     trajectory.(name) = squeeze(timeseries_data(i,1:3,:)) / 1000;
-% end
 
 %% Linear Kinematics
 
@@ -692,7 +678,7 @@ for i = 1:numCols
 end
 
 % plot_kinematics_ang(time, rhip_joint_angles);
-plot_kinematics_ang(time, rknee_joint_angles);
+% plot_kinematics_ang(time, rknee_joint_angles);
 % plot_kinematics_ang(time, rankle_joint_angles);
 % plot_kinematics_ang(time, lhip_joint_angles);
 % plot_kinematics_ang(time, lknee_joint_angles);
@@ -885,87 +871,81 @@ for i = 1:nPlates
     
 end
 
-%plot_kinematics(time, cops_global(:,:,2));
+% Plot raw force plates and local coordinate systems
+figure
+hold on
+grid on
+axis equal
+xlabel('X [m]')
+ylabel('Y [m]')
+zlabel('Z [m]')
+
+%Visualize Global Coordinate System
+quiver3(0,0,0,1,0,0,1, 'color', [1 0 0], 'HandleVisibility', 'off')
+quiver3(0,0,0,0,1,0,1, 'color', [0 1 0], 'HandleVisibility', 'off')
+quiver3(0,0,0,0,0,1,1, 'color', [0 0 1], 'HandleVisibility', 'off')
+
+colors = lines(4);   % 4 distinct colors
+nPlates = length(force_data);
+
+plate_origins = zeros(3,nPlates);
+plate_lcs = zeros(3,3,nPlates);
+r = zeros(3,nPlates);
+measurement_origins = zeros(3,nPlates);
+
+for i = 1:nPlates
+
+    % plotting force plates
+    plate_location = force_data(i).ForcePlateLocation / 1000; % force plate location data in global coordinates (converted to meters)
+    plot3(plate_location(:,1), plate_location(:,2), plate_location(:,3), '-o', 'Color', colors(i,:), 'DisplayName', ['Force Plate ' num2str(i)]);
+
+    % create local coordinate system / rotation matrix
+    geometric_origin = mean(plate_location, 1); % calculate geometric origin
+    fp_i = (plate_location(1,:) - plate_location(2,:))/norm(plate_location(1,:) - plate_location(2,:)); % x-axis
+    fp_j = (plate_location(3,:) - plate_location(2,:))/norm(plate_location(3,:) - plate_location(2,:)); % j-axis
+    fp_k = cross(fp_i, fp_j) / norm(cross(fp_i, fp_j)); % z-axis
+
+    fp_rot = [fp_i' fp_j' fp_k']; % rotation matrix in column form x,y,z
+
+    plate_origins(:,i)      = geometric_origin';
+    plate_lcs(:,:,i)      = fp_rot;
+
+    r(:,i) = plate_lcs(:,:,i) * force_data(i).ForcePlateOffset;
+    measurement_origins(:,i) = plate_origins(:,i) + plate_lcs(:,:,i) * force_data(i).ForcePlateOffset;
+
+    % -------------------------------
+    % Plot COP trajectories on plates
+    % -------------------------------
+    for i = 1:nPlates
+
+        % 1. Get vertical force
+        Fz = forces_global(3,:,i);
+
+        % 2. Define contact threshold
+        threshold = 10; % Newtons (adjust if needed)
+
+        contact_idx = Fz > threshold;
+
+        % 3. Get COP in global coordinates
+        cop = cops_global(:,:,i);
+
+        % 4. Remove non-contact data
+        cop(:, ~contact_idx) = NaN;
+
+        % 5. Plot COP in 3D
+        plot3(cop(1,:), cop(2,:), cop(3,:), ...
+            'LineWidth', 2, ...
+            'Color', colors(i,:), ...
+            'DisplayName', ['COP Plate ' num2str(i)]);
+    end
 
 
-% % Plot raw force plates and local coordinate systems
-% figure
-% hold on
-% grid on
-% axis equal
-% xlabel('X [m]')
-% ylabel('Y [m]')
-% zlabel('Z [m]')
-% 
-% %Visualize Global Coordinate System
-% quiver3(0,0,0,1,0,0,1, 'color', [1 0 0], 'HandleVisibility', 'off')
-% quiver3(0,0,0,0,1,0,1, 'color', [0 1 0], 'HandleVisibility', 'off')
-% quiver3(0,0,0,0,0,1,1, 'color', [0 0 1], 'HandleVisibility', 'off')
-% 
-% colors = lines(4);   % 4 distinct colors
-% nPlates = length(force_data);
-% 
-% plate_origins = zeros(3,nPlates);
-% plate_lcs = zeros(3,3,nPlates);
-% r = zeros(3,nPlates);
-% measurement_origins = zeros(3,nPlates);
-% 
-% for i = 1:nPlates
-%     
-%     % plotting force plates
-%     plate_location = force_data(i).ForcePlateLocation / 1000; % force plate location data in global coordinates (converted to meters)
-%     plot3(plate_location(:,1), plate_location(:,2), plate_location(:,3), '-o', 'Color', colors(i,:), 'DisplayName', ['Force Plate ' num2str(i)]);
-% 
-%     % create local coordinate system / rotation matrix
-%     geometric_origin = mean(plate_location, 1); % calculate geometric origin
-%     fp_i = (plate_location(1,:) - plate_location(2,:))/norm(plate_location(1,:) - plate_location(2,:)); % x-axis
-%     fp_j = (plate_location(3,:) - plate_location(2,:))/norm(plate_location(3,:) - plate_location(2,:)); % j-axis
-%     fp_k = cross(fp_i, fp_j) / norm(cross(fp_i, fp_j)); % z-axis
-% 
-%     fp_rot = [fp_i' fp_j' fp_k']; % rotation matrix in column form x,y,z
-% 
-%     plate_origins(:,i)      = geometric_origin';
-%     plate_lcs(:,:,i)      = fp_rot;
-% 
-%     r(:,i) = plate_lcs(:,:,i) * force_data(i).ForcePlateOffset;
-%     measurement_origins(:,i) = plate_origins(:,i) + plate_lcs(:,:,i) * force_data(i).ForcePlateOffset;
-% 
-%     % -------------------------------
-%     % Plot COP trajectories on plates
-%     % -------------------------------
-%     for i = 1:nPlates
-%         
-%         % 1. Get vertical force
-%         Fz = forces_global(3,:,i);
-%     
-%         % 2. Define contact threshold
-%         threshold = 10; % Newtons (adjust if needed)
-%     
-%         contact_idx = Fz > threshold;
-%     
-%         % 3. Get COP in global coordinates
-%         cop = cops_global(:,:,i);
-%     
-%         % 4. Remove non-contact data
-%         cop(:, ~contact_idx) = NaN;
-%     
-%         % 5. Plot COP in 3D
-%         plot3(cop(1,:), cop(2,:), cop(3,:), ...
-%             'LineWidth', 2, ...
-%             'Color', colors(i,:), ...
-%             'DisplayName', ['COP Plate ' num2str(i)]);
-%     end
-% 
-% 
-% end
-% 
-% legend
-% view(3)
-% rotate3d on
-% hold off
+end
 
-
-
+legend
+view(3)
+rotate3d on
+hold off
 
 
 %% Plotting
@@ -1013,52 +993,6 @@ force_lankle = foot_mass * (lfoot_com_acc - gravity) - force_left_total;
 force_lknee = shank_mass * (lshank_com_acc - gravity) + ...
               foot_mass * (lfoot_com_acc - gravity) - force_left_total;
 
-% --- Step 5: Plot ---
-% --- RIGHT FOOT PLOT ---
-figure;
-
-subplot(3,1,1)
-plot(time, force_right_total(1,:), 'color', 'red')
-xlabel('Time (s)')
-xlim([3,6])
-ylabel('Force X (N)')
-
-subplot(3,1,2)
-plot(time, force_right_total(2,:), 'color', 'green')
-xlabel('Time (s)')
-xlim([3,6])
-ylabel('Force Y (N)')
-
-subplot(3,1,3)
-plot(time, force_right_total(3,:), 'color', 'blue')
-xlabel('Time (s)')
-xlim([3,6])
-ylabel('Force Z (N)')
-
-
-% --- LEFT FOOT PLOT ---
-figure;
-
-subplot(3,1,1)
-plot(time, force_left_total(1,:))
-title('Left Foot - Fx')
-xlabel('Time (s)')
-ylabel('Force (N)')
-
-subplot(3,1,2)
-plot(time, force_left_total(2,:))
-title('Left Foot - Fy')
-xlabel('Time (s)')
-ylabel('Force (N)')
-
-subplot(3,1,3)
-plot(time, force_left_total(3,:))
-title('Left Foot - Fz')
-xlabel('Time (s)')
-ylabel('Force (N)')
-
-
-plot_kinematics(time, force_lknee);
 
 %% Inverse Dynamics
 gravity = [0; 0; 9.81];
@@ -1124,14 +1058,8 @@ rknee_moment_static = cross((rknee_center_global - rshank_com_pos), shank_mass *
 %plot_kinematics(time, rankle_moment_static);
 %plot_kinematics(time, rknee_moment_static);
 
-% Testing
-test = torques_global(:,:,2);
-plot_kinematics(time, test);
-
 % Complete Moment
-rankle_moment_4 = rfoot_inert_moment - torques_global(:,:,4) - cross((rankle_center_global - cops_global(:,:,4)), forces_global(:,:,4)) + cross((rankle_center_global - rfoot_com_pos), (foot_mass * (rfoot_com_acc - gravity)));
 rankle_moment_2 = rfoot_inert_moment - torques_global(:,:,2) - cross((rankle_center_global - cops_global(:,:,2)), forces_global(:,:,2)) + cross((rankle_center_global - rfoot_com_pos), (foot_mass * (rfoot_com_acc - gravity)));
-rknee_moment_4 = rfoot_inert_moment - rshank_inert_moment + cross((rknee_center_global - rshank_com_pos), shank_mass * (rshank_com_acc - gravity)) + cross((rknee_center_global - rfoot_com_pos), foot_mass * (rfoot_com_acc - gravity)) - torques_global(:,:,4) - cross(rknee_center_global - cops_global(:,:,4), forces_global(:,:,4));
 rknee_moment_2 = rfoot_inert_moment - rshank_inert_moment + cross((rknee_center_global - rshank_com_pos), shank_mass * (rshank_com_acc - gravity)) + cross((rknee_center_global - rfoot_com_pos), foot_mass * (rfoot_com_acc - gravity)) - torques_global(:,:,2) - cross(rknee_center_global - cops_global(:,:,2), forces_global(:,:,2));
 rknee_moment_2(3,:) = -rknee_moment_2(3,:);
 
@@ -1139,8 +1067,7 @@ rknee_moment_2(3,:) = -rknee_moment_2(3,:);
 plot_kinematics(time, -rankle_moment_2)
 plot_kinematics(time, -rknee_moment_2);
 
-
-%% Function
+%% Functions
 
 % Function for segment inertia and segment com
 function [I_xx, I_yy, I_zz, r_prime, I] = frustum_inertia(distal_radius, proximal_radius, length, M)
